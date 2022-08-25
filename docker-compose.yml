@@ -1,50 +1,63 @@
 version: '3.1'
 
 services:
-  rabbitmq3:
-      container_name: "rabbitmq"
-      image: rabbitmq:3.8-management-alpine
+  ho-rabbitmq3:
+      container_name: "ho-rabbitmq"
+      image: rabbitmq:3.10.7-management-alpine
       environment:
           - RABBITMQ_DEFAULT_USER=guest
           - RABBITMQ_DEFAULT_PASS=guest
       ports:
-          # AMQP protocol port
           - '5672:5672'
-          # HTTP management UI
           - '15672:15672'
+      volumes:
+        - ./configs/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+        - ./configs/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:16.0.0
+  ho-keycloak:
+    container_name: ho-keycloak
+    image: quay.io/keycloak/keycloak:16.1.1
     ports:
       - "8080:8080"
     environment:
       - KEYCLOAK_USER=admin
       - KEYCLOAK_PASSWORD=admin
-      - KK_TO_RMQ_URL=rabbitmq
+      - KK_TO_RMQ_URL=ho-rabbitmq
       - KK_TO_RMQ_PORT=5672
       - KK_TO_RMQ_USERNAME=guest
       - KK_TO_RMQ_PASSWORD=guest
       - KK_TO_RMQ_VHOST=/
+      - KEYCLOAK_IMPORT=/tmp/realm-export.json
     volumes:
-      - /resources/keycloak-to-rabbit-3.0.jar:/opt/jboss/keycloak/standalone/deployments/keycloak-to-rabbit-3.0.jar
-
-  my_vault:
-    container_name: my_vault
-    image: vault:latest
+      - ./resources/keycloak-to-rabbit-3.0.jar:/opt/jboss/keycloak/standalone/deployments/keycloak-to-rabbit-3.0.jar
+      - ./configs/keycloak/realm-export.json:/tmp/realm-export.json
+  
+  ho-vault:
+    container_name: ho-vault
+    image: vault:1.11.2
     ports:
       - "8200:8200"
     restart: always
     environment: 
       VAULT_DEV_LISTEN_ADDRESS: '0.0.0.0:8200'
     volumes:
-      - ./vault/volumes/logs:/vault/logs
-      - ./vault/volumes/file:/vault/file
-      - ./vault/volumes/config:/vault/config
+      - ./configs/vault/volumes/logs:/vault/logs
+      - ./configs/vault/volumes/file:/vault/file
+      - ./configs/vault/volumes/config:/vault/config
     cap_add:
       - IPC_LOCK
     entrypoint: vault server -config=/vault/config/vault.json
 
-  postgresql-hackathon:
+  ho-config-server:
+    container_name: ho-config-server
+    image: ghcr.io/tegridy/config-server:0.1
+    ports:
+      - 8888:8888
+    environment:
+      - VAULT_URL=ho-vault
+      - VAULT_PORT=8200  
+
+  ho-postgresql-hackathon-master:
     image: docker.io/bitnami/postgresql:14
     ports:
       - '5434:5432'
@@ -53,12 +66,12 @@ services:
       - POSTGRESQL_PASSWORD=qwerty
       - POSTGRESQL_DATABASE=hackathon_db
 
-  postgresql-user-master:
+  ho-postgresql-user-master:
     image: docker.io/bitnami/postgresql:14
     ports:
       - '5432:5432'
     volumes:
-      - 'postgresql_master_data:/bitnami/postgresql'
+      - postgresql_master_data:/bitnami/postgresql
     environment:
       - POSTGRESQL_REPLICATION_MODE=master
       - POSTGRESQL_REPLICATION_USER=repl_user
@@ -68,17 +81,17 @@ services:
       - POSTGRESQL_DATABASE=user_db
       - ALLOW_EMPTY_PASSWORD=yes
 
-  postgresql-user-slave:
+  ho-postgresql-user-slave:
     image: docker.io/bitnami/postgresql:14
     ports:
       - '5433:5432'
     depends_on:
-      - postgresql-user-master
+      - ho-postgresql-user-master
     environment:
         - POSTGRESQL_REPLICATION_MODE=slave
         - POSTGRESQL_REPLICATION_USER=repl_user
         - POSTGRESQL_REPLICATION_PASSWORD=repl_password
-        - POSTGRESQL_MASTER_HOST=postgresql-user-master
+        - POSTGRESQL_MASTER_HOST=ho-postgresql-user-master
         - POSTGRESQL_PASSWORD=qwerty
         - POSTGRESQL_MASTER_PORT_NUMBER=5432
         - ALLOW_EMPTY_PASSWORD=yes
