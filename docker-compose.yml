@@ -57,6 +57,12 @@ services:
       - VAULT_URL=ho-vault
       - VAULT_PORT=8200  
 
+  ho-discovery-service:
+    container_name: ho-discovery-service
+    image: discovery-service:0.1
+    ports:
+      - 8761:8761
+
   ho-postgresql-hackathon-master:
     image: docker.io/bitnami/postgresql:14
     ports:
