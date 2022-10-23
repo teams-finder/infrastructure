@@ -101,6 +101,16 @@ services:
         - POSTGRESQL_PASSWORD=qwerty
         - POSTGRESQL_MASTER_PORT_NUMBER=5432
         - ALLOW_EMPTY_PASSWORD=yes
+
+  ho-postgresql-messaging-master:
+    image: docker.io/bitnami/postgresql:14
+    ports:
+      - '5435:5432'
+    environment:
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_PASSWORD=qwerty
+      - POSTGRESQL_DATABASE=messaging_db
+          
 volumes:
   postgresql_master_data:
     driver: local
